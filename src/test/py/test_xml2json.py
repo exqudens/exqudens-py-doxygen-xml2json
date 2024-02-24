@@ -38,6 +38,20 @@ class TestXml2Json:
         Test 11.
         """
         try:
+            exit_code = Xml2Json.main([
+                'app.py',
+                '--version'
+            ])
+
+            assert exit_code == 0
+        except Exception as e:
+            self.__logger.error(e, exc_info=True)
+
+    def test_21(self):
+        """
+        Test 21.
+        """
+        try:
             project_dir = Path(__file__).parent.parent.parent.parent
             self.__logger.info(f"project_dir: '{project_dir}'")
             test_path_elements = [__name__, __class__.__name__, 'test_1']
@@ -78,9 +92,9 @@ class TestXml2Json:
         except Exception as e:
             self.__logger.error(e, exc_info=True)
 
-    def test_12(self):
+    def test_22(self):
         """
-        Test 12.
+        Test 22.
         """
         try:
             project_dir = Path(__file__).parent.parent.parent.parent

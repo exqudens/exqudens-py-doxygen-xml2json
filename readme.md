@@ -26,7 +26,7 @@ hatch run installer:pyinstaller --clean --onefile --name exqudens-doxygen-xml2js
 
 ```
 hatch run test:pytest -q --collect-only
-hatch run test:pytest --log-cli-level=INFO src/test/py
+hatch run test:pytest --log-cli-level=DEBUG src/test/py/test_xml2json.py::TestXml2Json::test_11
 ```
 
 ##### How To Test Wheel

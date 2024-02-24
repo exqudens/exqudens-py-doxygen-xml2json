@@ -9,6 +9,8 @@ from argparse import ArgumentParser
 
 import doxmlparser
 
+__version__ = '1.10.0'
+
 
 class Xml2Json:
     """
@@ -36,8 +38,9 @@ class Xml2Json:
     def main(cls, arguments: list[str]) -> int:
         try:
             parser = ArgumentParser()
-            parser.add_argument('--xml-file', type=str, required=True)
-            parser.add_argument('--output-dir', type=str, required=True)
+            parser.add_argument('--version', action='store_true')
+            parser.add_argument('--xml-file', type=str)
+            parser.add_argument('--output-dir', type=str)
             parser.add_argument('--indent', type=int, default=4, help='default: 4')
             parser.add_argument('--silence', type=bool, default=True, help='default: True')
             parser.add_argument('--warnings', type=bool, default=True, help='default: True')
@@ -45,12 +48,21 @@ class Xml2Json:
 
             args = parser.parse_args(arguments[1:])
 
+            cls.__logger.debug(f"args.version: '{args.version}' ({type(args.version)})")
             cls.__logger.debug(f"args.xml_file: '{args.xml_file}' ({type(args.xml_file)})")
             cls.__logger.debug(f"args.output_dir: '{args.output_dir}' ({type(args.output_dir)})")
             cls.__logger.debug(f"args.indent: '{args.indent}' ({type(args.indent)})")
             cls.__logger.debug(f"args.silence: '{args.silence}' ({type(args.silence)})")
             cls.__logger.debug(f"args.warnings: '{args.warnings}' ({type(args.warnings)})")
             cls.__logger.debug(f"args.xml_type: '{args.xml_type}' ({type(args.xml_type)})")
+
+            if args.version:
+                print(__version__)
+                return 0
+            else:
+                if args.xml_file is None or args.output_dir is None:
+                    parser.print_help()
+                    return 1
 
             cls.check_output_dir(args.output_dir)
 
