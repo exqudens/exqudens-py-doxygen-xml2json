@@ -2,18 +2,17 @@
 .idea/
 .vs/
 .vscode/
-idea-build/
-vs-build/
-vsc-build/
-build/
-tmp/
-__pycache__/
 .pytest_cache/
+__pycache__/
+build/
+dist/
+tmp/
 
 # Files
 *.iml
 *.iws
 *.ipr
 *.ids
+*.spec
 CMakeUserPresets.json
 CMakeSettings.json
