@@ -7,8 +7,15 @@
 
 ### Hatch
 
+- install pip `<venv-python> -m pip install hatch==1.9.3`
 - set env var `HATCH_DATA_DIR` to `build/hatch/data-dir`
 - set env var `HATCH_CACHE_DIR` to `build/hatch/cache-dir`
+
+##### How To Clean
+
+```
+git clean -xdf -e .idea -e tmp
+```
 
 ##### How To Build
 
@@ -16,10 +23,11 @@
 hatch build
 ```
 
-##### How To Executable
+##### How To Build Executable
 
 ```
-hatch run installer:pyinstaller --clean --onefile --name exqudens-doxygen-xml2json src/main/py/exqudens/doxygen/xml2json.py
+hatch run installer:pyinstaller --clean --onefile --name doxygen-xml2json src/main/py/exqudens/doxygen/xml2json.py
+hatch run installer:pyinstaller --clean --contents-directory doxygen-xml2json --name doxygen-xml2json src/main/py/exqudens/doxygen/xml2json.py
 ```
 
 ##### How To Test

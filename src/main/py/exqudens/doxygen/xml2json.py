@@ -6,10 +6,15 @@ from pathlib import Path
 from typing import Any
 from enum import Enum
 from argparse import ArgumentParser
+from queue import Queue
+from concurrent.futures import Executor
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future
 
 import doxmlparser
 
-__version__ = '1.10.0'
+__version__ = '1.10.0.1'
 
 
 class Xml2Json:
@@ -41,6 +46,8 @@ class Xml2Json:
             parser.add_argument('--version', action='store_true')
             parser.add_argument('--xml-file', type=str)
             parser.add_argument('--output-dir', type=str)
+            parser.add_argument('--parallel', type=int, default=0, help='default: 0')
+            parser.add_argument('--parallel-type', type=str, default='thread', help='default: thread', choices=['thread', 'process'])
             parser.add_argument('--indent', type=int, default=4, help='default: 4')
             parser.add_argument('--silence', type=bool, default=True, help='default: True')
             parser.add_argument('--warnings', type=bool, default=True, help='default: True')
@@ -51,6 +58,8 @@ class Xml2Json:
             cls.__logger.debug(f"args.version: '{args.version}' ({type(args.version)})")
             cls.__logger.debug(f"args.xml_file: '{args.xml_file}' ({type(args.xml_file)})")
             cls.__logger.debug(f"args.output_dir: '{args.output_dir}' ({type(args.output_dir)})")
+            cls.__logger.debug(f"args.parallel: '{args.parallel}' ({type(args.parallel)})")
+            cls.__logger.debug(f"args.parallel_type: '{args.parallel_type}' ({type(args.parallel_type)})")
             cls.__logger.debug(f"args.indent: '{args.indent}' ({type(args.indent)})")
             cls.__logger.debug(f"args.silence: '{args.silence}' ({type(args.silence)})")
             cls.__logger.debug(f"args.warnings: '{args.warnings}' ({type(args.warnings)})")
@@ -65,9 +74,10 @@ class Xml2Json:
                     return 1
 
             cls.check_output_dir(args.output_dir)
+            cls.check_parallel(args.parallel)
 
             if args.xml_type == 'all':
-                root_result = Xml2Json.transform(
+                root_result = cls.transform(
                     xml_file=args.xml_file,
                     silence=args.silence,
                     warnings=args.warnings,
@@ -84,21 +94,62 @@ class Xml2Json:
                 compound_dict = root_result[len(root_result) - 1]
                 if len(compound_dict) < 2:
                     raise Exception(f"'compound_dict' too small!")
-                for compound in compound_dict['compound']:
-                    compound_xml_file_name = compound['refid'] + '.xml'
-                    compound_xml_file = str(Path(args.xml_file).parent.joinpath(compound_xml_file_name))
-                    compound_result = Xml2Json.transform(
-                        xml_file=compound_xml_file,
-                        silence=args.silence,
-                        warnings=args.warnings,
-                        xml_type='compound'
-                    )
-                    json_file = Path(args.output_dir).joinpath(Path(compound_xml_file_name).stem + '.json')
-                    json_str = json.dumps(compound_result, indent=args.indent)
-                    Path(json_file).parent.mkdir(parents=True, exist_ok=True)
-                    Path(json_file).write_text(json_str)
+                if args.parallel == 0:
+                    for compound in compound_dict['compound']:
+                        compound_xml_file_name = compound['refid'] + '.xml'
+                        compound_xml_file = str(Path(args.xml_file).parent.joinpath(compound_xml_file_name))
+                        compound_result = cls.transform(
+                            xml_file=compound_xml_file,
+                            silence=args.silence,
+                            warnings=args.warnings,
+                            xml_type='compound'
+                        )
+                        json_file = Path(args.output_dir).joinpath(Path(compound_xml_file_name).stem + '.json')
+                        json_str = json.dumps(compound_result, indent=args.indent)
+                        Path(json_file).parent.mkdir(parents=True, exist_ok=True)
+                        Path(json_file).write_text(json_str)
+                else:
+                    queue_files: Queue[str] = Queue()
+                    queue_futures: Queue[Future] = Queue(maxsize=args.parallel)
+                    for compound in compound_dict['compound']:
+                        compound_xml_file_name = compound['refid'] + '.xml'
+                        compound_xml_file = str(Path(args.xml_file).parent.joinpath(compound_xml_file_name))
+                        queue_files.put(compound_xml_file)
+
+                    executor: Executor
+                    if args.parallel_type == 'thread':
+                        executor = ThreadPoolExecutor(max_workers=args.parallel)
+                    else:
+                        executor = ProcessPoolExecutor(max_workers=args.parallel)
+
+                    try:
+                        while not queue_files.empty():
+                            list_futures: list[Future] = []
+                            while not queue_futures.empty():
+                                future = queue_futures.get()
+                                list_futures.append(future)
+
+                            for future in list_futures:
+                                if not future.done():
+                                    queue_futures.put(future)
+
+                            if queue_futures.full():
+                                continue
+
+                            compound_xml_file = queue_files.get()
+                            future = executor.submit(
+                                cls.execute_in_parallel,
+                                compound_xml_file,
+                                args.silence,
+                                args.warnings,
+                                args.output_dir,
+                                args.indent
+                            )
+                            queue_futures.put(future)
+                    finally:
+                        executor.shutdown(wait=True)
             else:
-                root_result = Xml2Json.transform(
+                root_result = cls.transform(
                     xml_file=args.xml_file,
                     silence=args.silence,
                     warnings=args.warnings,
@@ -116,12 +167,36 @@ class Xml2Json:
             raise e
 
     @classmethod
+    def execute_in_parallel(
+        cls,
+        compound_xml_file: str,
+        silence: bool,
+        warnings: bool,
+        output_dir: str,
+        indent: int
+    ) -> None:
+        try:
+            compound_result = cls.transform(
+                xml_file=compound_xml_file,
+                silence=silence,
+                warnings=warnings,
+                xml_type='compound'
+            )
+            json_file = Path(output_dir).joinpath(Path(Path(compound_xml_file).name).stem + '.json')
+            json_str = json.dumps(compound_result, indent=indent)
+            Path(json_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(json_file).write_text(json_str)
+        except Exception as e:
+            cls.__logger.error(e, exc_info=True)
+            raise e
+
+    @classmethod
     def transform(
-            cls,
-            xml_file: str,
-            silence: bool = True,
-            warnings: bool = True,
-            xml_type: str = None
+        cls,
+        xml_file: str,
+        silence: bool = True,
+        warnings: bool = True,
+        xml_type: str = None
     ) -> list[dict[str, Any]]:
         """
         Main method.
@@ -182,11 +257,23 @@ class Xml2Json:
             raise e
 
     @classmethod
+    def check_parallel(cls, parallel: int) -> None:
+        try:
+            if parallel is None:
+                raise Exception(f"'parallel' is None!")
+
+            if parallel < 0 or parallel > 1024:
+                raise Exception(f"'parallel' out of range 0-1024!")
+        except Exception as e:
+            cls.__logger.error(e, exc_info=True)
+            raise e
+
+    @classmethod
     def transform_index(
-            cls,
-            xml_file: str,
-            silence: bool = False,
-            warnings: bool = False
+        cls,
+        xml_file: str,
+        silence: bool = False,
+        warnings: bool = False
     ) -> list[dict[str, Any]]:
         try:
             cls.check_xml_file(xml_file)
@@ -203,10 +290,10 @@ class Xml2Json:
 
     @classmethod
     def transform_compound(
-            cls,
-            xml_file: str,
-            silence: bool = False,
-            warnings: bool = False
+        cls,
+        xml_file: str,
+        silence: bool = False,
+        warnings: bool = False
     ) -> list[dict[str, Any]]:
         try:
             cls.check_xml_file(xml_file)
