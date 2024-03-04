@@ -247,7 +247,7 @@ class Xml2Json:
     def info_message(cls, message: str) -> None:
         try:
             with cls.__lock:
-                cls.__logger.info(message)
+                print(message)
         except Exception as e:
             cls.__logger.error(e, exc_info=True)
             raise e
