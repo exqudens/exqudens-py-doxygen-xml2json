@@ -40,7 +40,8 @@ class TestXml2Json:
         try:
             exit_code = Xml2Json.main([
                 'app.py',
-                '--version'
+                '--version',
+                '--verbose'
             ])
 
             assert exit_code == 0
@@ -84,6 +85,7 @@ class TestXml2Json:
 
             exit_code = Xml2Json.main([
                 'app.py',
+                '--verbose',
                 '--xml-file', xml_file,
                 '--output-dir', output_dir,
                 '--parallel', '8'
@@ -132,8 +134,8 @@ class TestXml2Json:
 
             exit_code = Xml2Json.main([
                 'app.py',
+                '--verbose',
                 '--xml-file', xml_file,
-                '--output-dir', output_dir,
                 '--parallel', '8',
                 '--parallel-type', 'process'
             ])

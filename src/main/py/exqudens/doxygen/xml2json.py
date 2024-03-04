@@ -7,6 +7,7 @@ from typing import Any
 from enum import Enum
 from argparse import ArgumentParser
 from queue import Queue
+from threading import Lock
 from concurrent.futures import Executor
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import ProcessPoolExecutor
@@ -14,7 +15,7 @@ from concurrent.futures import Future
 
 import doxmlparser
 
-__version__ = '1.10.0.1'
+__version__ = '1.10.0.2'
 
 
 class Xml2Json:
@@ -22,6 +23,7 @@ class Xml2Json:
     Class Xml2Json.
     """
     __logger = logging.getLogger('.'.join([__name__, __qualname__]))
+    __lock = Lock()
 
     @classmethod
     def set_logger_level(cls, level=logging.DEBUG):
@@ -44,8 +46,9 @@ class Xml2Json:
         try:
             parser = ArgumentParser()
             parser.add_argument('--version', action='store_true')
+            parser.add_argument('--verbose', action='store_true')
             parser.add_argument('--xml-file', type=str)
-            parser.add_argument('--output-dir', type=str)
+            parser.add_argument('--output-dir', type=str, default='<default>', help='default: XML_FILE/../../json')
             parser.add_argument('--parallel', type=int, default=0, help='default: 0')
             parser.add_argument('--parallel-type', type=str, default='thread', help='default: thread', choices=['thread', 'process'])
             parser.add_argument('--indent', type=int, default=4, help='default: 4')
@@ -55,7 +58,11 @@ class Xml2Json:
 
             args = parser.parse_args(arguments[1:])
 
+            if args.output_dir == '<default>':
+                args.output_dir = str(Path(args.xml_file).parent.parent.joinpath('json'))
+
             cls.__logger.debug(f"args.version: '{args.version}' ({type(args.version)})")
+            cls.__logger.debug(f"args.verbose: '{args.verbose}' ({type(args.verbose)})")
             cls.__logger.debug(f"args.xml_file: '{args.xml_file}' ({type(args.xml_file)})")
             cls.__logger.debug(f"args.output_dir: '{args.output_dir}' ({type(args.output_dir)})")
             cls.__logger.debug(f"args.parallel: '{args.parallel}' ({type(args.parallel)})")
@@ -75,6 +82,9 @@ class Xml2Json:
 
             cls.check_output_dir(args.output_dir)
             cls.check_parallel(args.parallel)
+
+            if args.verbose:
+                cls.info_message(f"process: '{args.xml_file}'")
 
             if args.xml_type == 'all':
                 root_result = cls.transform(
@@ -98,6 +108,10 @@ class Xml2Json:
                     for compound in compound_dict['compound']:
                         compound_xml_file_name = compound['refid'] + '.xml'
                         compound_xml_file = str(Path(args.xml_file).parent.joinpath(compound_xml_file_name))
+
+                        if args.verbose:
+                            cls.info_message(f"process: '{compound_xml_file}'")
+
                         compound_result = cls.transform(
                             xml_file=compound_xml_file,
                             silence=args.silence,
@@ -137,6 +151,10 @@ class Xml2Json:
                                 continue
 
                             compound_xml_file = queue_files.get()
+
+                            if args.verbose:
+                                cls.info_message(f"process: '{compound_xml_file}'")
+
                             future = executor.submit(
                                 cls.execute_in_parallel,
                                 compound_xml_file,
@@ -225,6 +243,15 @@ class Xml2Json:
                 return cls.transform_compound(xml_file, silence, warnings)
             else:
                 raise Exception(f"Unsupported 'xml_type': '{xml_type}'!")
+        except Exception as e:
+            cls.__logger.error(e, exc_info=True)
+            raise e
+
+    @classmethod
+    def info_message(cls, message: str) -> None:
+        try:
+            with cls.__lock:
+                cls.__logger.info(message)
         except Exception as e:
             cls.__logger.error(e, exc_info=True)
             raise e
