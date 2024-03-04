@@ -47,7 +47,7 @@ class Xml2Json:
             parser = ArgumentParser()
             parser.add_argument('--version', action='store_true')
             parser.add_argument('--verbose', action='store_true')
-            parser.add_argument('--xml-file', type=str)
+            parser.add_argument('--xml-file', type=str, required=True)
             parser.add_argument('--output-dir', type=str, default='<default>', help='default: XML_FILE/../../json')
             parser.add_argument('--parallel', type=int, default=0, help='default: 0')
             parser.add_argument('--parallel-type', type=str, default='thread', help='default: thread', choices=['thread', 'process'])
@@ -58,7 +58,7 @@ class Xml2Json:
 
             args = parser.parse_args(arguments[1:])
 
-            if args.output_dir == '<default>':
+            if args.output_dir == '<default>' and args.xml_file is not None:
                 args.output_dir = str(Path(args.xml_file).parent.parent.joinpath('json'))
 
             cls.__logger.debug(f"args.version: '{args.version}' ({type(args.version)})")
@@ -75,10 +75,6 @@ class Xml2Json:
             if args.version:
                 print(__version__)
                 return 0
-            else:
-                if args.xml_file is None or args.output_dir is None:
-                    parser.print_help()
-                    return 1
 
             cls.check_output_dir(args.output_dir)
             cls.check_parallel(args.parallel)
